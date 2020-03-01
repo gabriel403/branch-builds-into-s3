@@ -1,0 +1,39 @@
+name: Deploy Branch to S3
+
+on: [push]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Use Node.js 12
+        uses: actions/setup-node@v1
+        with:
+          node-version: 12.x
+      - name: Extract branch name
+        shell: bash
+        run: echo "##[set-output name=branch_name;]$(echo ${GITHUB_REF#refs/heads/})"
+        id: extract_branch
+      - name: Find and Replace
+        uses: jacobtomlinson/gha-find-replace@master
+        with:
+          find: 'PATH_PREFIX'
+          replace: ${{ steps.extract_branch.outputs.branch_name }}
+          include: gatsby-config.js
+      - name: Build
+        run: |
+          yarn
+          yarn build --prefix-paths
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+      - name: Deploy
+        uses: jonelantha/gatsby-s3-action@v1
+        with:
+          dest-s3-bucket: gh-actions-branch-builds/${{ steps.extract_branch.outputs.branch_name }}
